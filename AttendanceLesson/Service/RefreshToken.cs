@@ -1,7 +1,7 @@
 using System;
 using System.Security.Cryptography;
 
-namespace Revizor_Service.Services;
+namespace AttendanceLesson.Service;
 
 public class RefreshToken
 {
