@@ -8,7 +8,9 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using AttendanceLesson.Responses;
 using Microsoft.AspNetCore.Identity;
-using System.Xml;
+using AttendanceLesson.Service;
+using System.Security.Claims;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOpenApi();
@@ -46,7 +48,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization(opt =>
 {
     opt.AddPolicy("admin",p => p.RequireRole("admin"));
-    opt.AddPolicy("revizor", p=> p.RequireRole("revizor"));
+    opt.AddPolicy("teacher", p=> p.RequireRole("teacher"));
+    opt.AddPolicy("headman", p=> p.RequireRole("headman"));
+    opt.AddPolicy("student", p=> p.RequireRole("student"));
 });
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -62,7 +66,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/roles", async (AppDbContext db) => Results.Ok(await db.Roles.ToArrayAsync()));
+app.MapGet("/roles", async (AppDbContext db) => Results.Ok(await db.Roles.ToArrayAsync()))
+.RequireAuthorization(p=> p.RequireRole("admin","teacher","headman"))
+.WithTags("Role");
 
 app.MapPost("/roles/", async (AppDbContext db, CreateRole dto) =>
 {
@@ -70,6 +76,7 @@ app.MapPost("/roles/", async (AppDbContext db, CreateRole dto) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
+.RequireAuthorization("admin")
 .WithTags("Role");
 
 app.MapDelete("/roles/{roleId}", async (AppDbContext db, int roleId) =>
@@ -80,6 +87,7 @@ app.MapDelete("/roles/{roleId}", async (AppDbContext db, int roleId) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
+.RequireAuthorization("admin")
 .WithTags("Role");
 
 app.MapGet("/roles/{roleId}", async (AppDbContext db, int roleId) =>
@@ -87,9 +95,10 @@ app.MapGet("/roles/{roleId}", async (AppDbContext db, int roleId) =>
     var role = await db.Roles.FirstOrDefaultAsync(r=> r.Id==roleId);
     return role != null ? Results.Ok(role) : Results.NotFound();
 })
+.RequireAuthorization("admin")
 .WithTags("Role");
 
-app.MapPatch("/roles/{roleId}",async (AppDbContext db, int roleId, UpdateRole dto ) =>
+app.MapPatch("/roles/{roleId}",async (AppDbContext db,  UpdateRole dto,int roleId ) =>
 {
     var role = await db.Roles.FirstOrDefaultAsync(r=> r.Id == roleId);
     if (role == null) return Results.NotFound();
@@ -97,6 +106,7 @@ app.MapPatch("/roles/{roleId}",async (AppDbContext db, int roleId, UpdateRole dt
     await db.SaveChangesAsync();
     return Results.Ok();
 })
+.RequireAuthorization("admin")
 .WithTags("Role");
 
 app.MapGet("/users", async (AppDbContext db) =>
@@ -112,6 +122,7 @@ app.MapGet("/users", async (AppDbContext db) =>
 
     return Results.Ok(users);
 })
+.RequireAuthorization("admin")
 .WithTags("User");
 
 app.MapPost("/users/", async (IPasswordHasher<CreateUser> hasher, AppDbContext db, CreateUser dto) =>
@@ -125,9 +136,9 @@ app.MapPost("/users/", async (IPasswordHasher<CreateUser> hasher, AppDbContext d
         PasswordHash = dto.Password
     });
     await db.SaveChangesAsync();
-
     return Results.Ok("User is created");
 })
+.RequireAuthorization("admin")
 .WithTags("User");
 
 app.MapDelete("/users/{userId}", async (AppDbContext db, int userId) =>
@@ -140,6 +151,7 @@ app.MapDelete("/users/{userId}", async (AppDbContext db, int userId) =>
     await db.SaveChangesAsync();
     return Results.Ok("User is deleted");
 })
+.RequireAuthorization("admin")
 .WithTags("User");
 
 app.MapGet("/users/{userId}", async (AppDbContext db, int userId) =>
@@ -150,6 +162,7 @@ app.MapGet("/users/{userId}", async (AppDbContext db, int userId) =>
         ? Results.Ok(user)
         : Results.NotFound("User does not exist");
 })
+.RequireAuthorization("admin")
 .WithTags("User");
 
 app.MapPatch("/users/{userId}", async (AppDbContext db, int userId, UpdateUser dto) =>
@@ -166,6 +179,7 @@ app.MapPatch("/users/{userId}", async (AppDbContext db, int userId, UpdateUser d
 
     return Results.Ok("User is edited");
 })
+.RequireAuthorization("admin")
 .WithTags("User");
 
 app.MapGet("/groups", async (AppDbContext db) => Results.Ok(await db.Groups.ToArrayAsync()));
@@ -176,7 +190,8 @@ app.MapPost("/groups/", async (AppDbContext db, CreateGroup dto) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Group");
 
 app.MapDelete("/groups/{groupId}", async (AppDbContext db, int groupId) =>
 {
@@ -186,16 +201,22 @@ app.MapDelete("/groups/{groupId}", async (AppDbContext db, int groupId) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Group")
+.WithDescription("Request to DELETE group by groupId");
+
 
 app.MapGet("/groups/{groupId}", async (AppDbContext db, int groupId) =>
 {
     var group = await db.Groups.FirstOrDefaultAsync(g=> g.Id==groupId);
     return group != null ? Results.Ok(group) : Results.NotFound();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Role")
+.WithDescription("Request to GET group by groupId");
 
-app.MapPatch("/groups/{groupId}",async (AppDbContext db, int groupId, UpdateGroup dto ) =>
+
+app.MapPatch("/groups/{groupId}",async (AppDbContext db, UpdateGroup dto,int groupId) =>
 {
     var group = await db.Groups.FirstOrDefaultAsync(g=> g.Id == groupId);
     if (group == null) return Results.NotFound();
@@ -203,9 +224,15 @@ app.MapPatch("/groups/{groupId}",async (AppDbContext db, int groupId, UpdateGrou
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Group")
+.WithDescription("Request to PATCH group by groupId");
 
-app.MapGet("/lessons", async (AppDbContext db) => Results.Ok(await db.Lessons.ToArrayAsync()));
+app.MapGet("/lessons", async (AppDbContext db) => Results.Ok(await db.Lessons.ToArrayAsync()))
+.RequireAuthorization("admin")
+.WithTags("Lesson")
+.WithDescription("Request to GET all lessons ");
+
 
 app.MapPost("/lessons/", async (AppDbContext db, CreateGroup dto) =>
 {
@@ -213,7 +240,10 @@ app.MapPost("/lessons/", async (AppDbContext db, CreateGroup dto) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Lesson")
+.WithDescription("Request to POST (add) lesson");
+
 
 app.MapDelete("/lessons/{lessonId}", async (AppDbContext db, int lessonId) =>
 {
@@ -223,16 +253,22 @@ app.MapDelete("/lessons/{lessonId}", async (AppDbContext db, int lessonId) =>
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Lesson")
+.WithDescription("Request to DELETE lesson by lessonId");
+
 
 app.MapGet("/lessons/{lessonId}", async (AppDbContext db, int lessonId) =>
 {
     var lesson = await db.Lessons.FirstOrDefaultAsync(l=> l.Id==lessonId);
     return lesson != null ? Results.Ok(lesson) : Results.NotFound();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Lesson")
+.WithDescription("Request to get lesson by lessonId");
 
-app.MapPatch("/lessons/{lessonId}",async (AppDbContext db, int lessonId, UpdateGroup dto ) =>
+
+app.MapPatch("/lessons/{lessonId}",async (AppDbContext db, UpdateGroup dto, int lessonId) =>
 {
     var lesson = await db.Lessons.FirstOrDefaultAsync(l=> l.Id == lessonId);
     if (lesson == null) return Results.NotFound();
@@ -240,7 +276,10 @@ app.MapPatch("/lessons/{lessonId}",async (AppDbContext db, int lessonId, UpdateG
     await db.SaveChangesAsync();
     return Results.Ok();
 })
-.WithTags("Role");
+.RequireAuthorization("admin")
+.WithTags("Lesson")
+.WithDescription("Request to PATCH (edit) lesson by lessonId");
+
 
 app.MapGet("/logbooks" , async(AppDbContext db) =>
 {
@@ -263,7 +302,11 @@ app.MapGet("/logbooks" , async(AppDbContext db) =>
     }
     ).ToArray();
     return Results.Ok(result);
-});
+})
+.RequireAuthorization("admin")
+.WithTags("Logbook")
+.WithDescription("Request to GET all logs grouping by group ");
+
 
 app.MapPost("/logbooks/", async (AppDbContext db , CreateLogBook dto) =>
 {
@@ -279,7 +322,11 @@ app.MapPost("/logbooks/", async (AppDbContext db , CreateLogBook dto) =>
     });
     await db.SaveChangesAsync();
     return Results.Created("/logbook","Record is creared");
-});
+})
+.RequireAuthorization(p=> p.RequireRole("admin","teaher","headman"))
+.WithTags("Logbook")
+.WithDescription("Request to POST (add) log");
+
 
 app.MapPatch("/logbooks/{logbookId}", async (AppDbContext db, UpdateLogBook dto, int logbookId) =>
 {
@@ -297,9 +344,12 @@ app.MapPatch("/logbooks/{logbookId}", async (AppDbContext db, UpdateLogBook dto,
 
     await db.SaveChangesAsync();
     return Results.NoContent();
-});
+})
+.RequireAuthorization(p=> p.RequireRole("admin","teaher","headman"))
+.WithTags("Logbook")
+.WithDescription("Request to PATCH (edit) log by groupId");
 
-app.MapDelete("/logbooks/{logbookId}", async (AppDbContext db, UpdateLogBook dto, int logbookId) =>
+app.MapDelete("/logbooks/{logbookId}", async (AppDbContext db, int logbookId) =>
 {
    var logbook = await db.Logbooks.FirstOrDefaultAsync(l=> l.Id == logbookId);
    if (logbook == null) return Results.NotFound();
@@ -308,7 +358,11 @@ app.MapDelete("/logbooks/{logbookId}", async (AppDbContext db, UpdateLogBook dto
     await db.SaveChangesAsync();
 
     return Results.NoContent(); 
-});
+})
+.RequireAuthorization(p=> p.RequireRole("admin","teaher","headman"))
+.WithTags("Logbook")
+.WithDescription("Request to DELETE log by logbooId");
+
 
 app.MapGet("/logbooks/{groupId}", async (AppDbContext db, int groupId) =>
 {
@@ -321,6 +375,90 @@ app.MapGet("/logbooks/{groupId}", async (AppDbContext db, int groupId) =>
                         .OrderBy(r=> r.CreatedAt)
                         .ToArrayAsync();
     return Results.Ok(logbook);
+})
+.RequireAuthorization(p=> p.RequireRole("admin","teaher","headman"))
+.WithTags("Logbook")
+.WithDescription("Request to GET log by groupId");
+
+app.MapPost("/login", async (AppDbContext db, IPasswordHasher<User> hasher, HttpContext http, IConfiguration cfg, Login dto) =>
+{
+    var user = await db.Users.FirstAsync(u=> u.Name == dto.Name);
+    
+    if (user == null) return Results.Unauthorized();
+
+    if (hasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password) != PasswordVerificationResult.Success) 
+        return Results.Unauthorized();
+
+    user.RefreshToken = RefreshToken.GenerateRefreshToken();
+    user.RefreshTokenExpires = DateTime.UtcNow.AddDays(7);
+
+    await  db.SaveChangesAsync();
+
+    http.Response.Cookies.Append("refreshToken", user.RefreshToken, new CookieOptions
+    {
+        HttpOnly=true,
+        Secure=true,
+        SameSite=SameSiteMode.Strict,
+        Expires=user.RefreshTokenExpires
+    });
+
+    return Results.Ok(JWT.GenToken(user, cfg));
 });
+
+app.MapPost("/refresh", async (AppDbContext db, HttpContext http, IConfiguration cfg) =>
+{
+    var refreshToken = http.Request.Cookies["refreshToken"];
+    if (refreshToken == null) return Results.NotFound();
+
+    var user = await db.Users.FirstOrDefaultAsync(u=> u.RefreshToken == refreshToken);
+    if (user==null) return Results.Unauthorized();
+
+    user.RefreshToken = RefreshToken.GenerateRefreshToken();
+    user.RefreshTokenExpires = DateTime.UtcNow.AddDays(7);
+
+    await db.SaveChangesAsync();
+
+    http.Response.Cookies.Append("refreshToken", user.RefreshToken, new CookieOptions
+    {
+        HttpOnly=true,
+        Expires=user.RefreshTokenExpires,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Path = "/"
+    });
+    return Results.Ok(JWT.GenToken(user,cfg));
+});
+
+app.MapGet("/users/me", async (AppDbContext db, ClaimsPrincipal claims, HttpContext http) =>
+{
+    var success = int.TryParse(claims.FindFirstValue(ClaimTypes.NameIdentifier), out int userId);
+    if (!success) return Results.Unauthorized();
+    var user = await db.Users
+        .Include(u=> u.Group)
+        .Include(u=> u.Role)
+        .FirstOrDefaultAsync(u=> u.Id == userId);
+    if (user == null) return Results.Unauthorized();
+    var userInfo = new
+    {
+        Id = user.Id,
+        Name = user.Name,
+        Group = user.Group.Name ?? "no group" ,
+        Role = user.Role.Name
+    };
+    var json = JsonSerializer.Serialize(userInfo);
+    var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+
+    http.Response.Cookies.Append("userInfo", base64, new CookieOptions
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        Expires = DateTimeOffset.UtcNow.AddDays(7),
+        Path = "/"
+    });
+    
+    return  Results.NoContent();
+})
+.RequireAuthorization();
 
 app.Run();
