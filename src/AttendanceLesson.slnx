@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/AttendanceLesson.Infrastructure/">
+    <Project Path="AttendanceLesson.Infrastructure/AttendanceLesson.Infrestructure.csproj" />
+  </Folder>
+  <Project Path="AttendanceLesson.Api/AttendanceLesson.Api.csproj" />
+  <Project Path="AttendanceLesson.Application/AttendanceLesson.Application.csproj" />
+  <Project Path="AttendanceLesson.Domain/AttendanceLesson.Domain.csproj" />
+</Solution>
