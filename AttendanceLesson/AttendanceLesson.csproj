@@ -16,6 +16,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
     <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="10.2.3" />
+  <Compile Remove="Test/**/*.cs" />
+  <Content Remove="Test/**/*.cs" />
+  <None    Remove="Test/**/*.cs" />
   </ItemGroup>
 
 </Project>
