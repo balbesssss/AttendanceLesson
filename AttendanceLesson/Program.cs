@@ -474,3 +474,6 @@ app.MapGet("/users/me", async (AppDbContext db, ClaimsPrincipal claims, HttpCont
 .RequireAuthorization();
 
 app.Run();
+
+public partial class Program { }
+
